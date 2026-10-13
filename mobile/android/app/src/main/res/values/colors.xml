@@ -1,0 +1,14 @@
+<resources>
+    <color name="primary">#0F172A</color>
+    <color name="primary_dark">#020617</color>
+    <color name="accent_emerald">#10B981</color>
+    <color name="emerald_light">#D1FAE5</color>
+    <color name="emerald_dark">#065F46</color>
+    <color name="background_light">#F8FAFC</color>
+    <color name="card_surface">#FFFFFF</color>
+    <color name="text_main">#0F172A</color>
+    <color name="text_muted">#64748B</color>
+    <color name="border_subtle">#E2E8F0</color>
+    <color name="amber_warning">#F59E0B</color>
+    <color name="rose_alert">#EF4444</color>
+</resources>

@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">FleetSentinel Driver</string>
+    <string name="title_activity_main">FleetSentinel Driver Portal</string>
+    <string name="corridor_name">N4 Highveld Freight Artery</string>
+    <string name="corridor_sub">Pretoria East ⇄ Bronkhorstspruit ⇄ Witbank</string>
+    <string name="driver_label">Driver: Sipho Dlamini (DRV-01)</string>
+    <string name="truck_label">Vehicle: WP 889 GP (Volvo FH16)</string>
+    <string name="status_service_active">Tracking Active (N4 Geofenced)</string>
+    <string name="status_service_stopped">Tracking Stopped</string>
+    <string name="btn_start_tracking">Start Tracking Service</string>
+    <string name="btn_stop_tracking">Stop Tracking Service</string>
+    <string name="btn_battery_whitelist">Exempt Battery Optimization</string>
+    <string name="btn_force_sync">Force Sync Local Cache</string>
+    <string name="queue_status_format">Offline SQLite Buffer: %d pings queued</string>
+</resources>

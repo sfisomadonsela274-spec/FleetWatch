@@ -1,0 +1,120 @@
+services:
+  # ----------------------------------------------------------------------------
+  # 1. Edge Gateway & APK Distribution (Nginx Reverse Proxy & Static Cockpit)
+  # ----------------------------------------------------------------------------
+  fleetwatch-gateway:
+    image: nginx:alpine
+    container_name: fleetwatch-gateway
+    restart: always
+    ports:
+      - "${GATEWAY_PORT:-8080}:80"
+    volumes:
+      - ./:/var/www/fleetwatch:ro
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      fleetwatch-node:
+        condition: service_healthy
+      fleetwatch-backend:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # 2. Node.js & Socket.io Real-Time Telemetry Engine
+  # ----------------------------------------------------------------------------
+  fleetwatch-node:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: fleetwatch-node
+    restart: always
+    ports:
+      - "${NODE_PORT:-4010}:4000"
+    env_file:
+      - .env
+    environment:
+      - PORT=4000
+      - HOST=0.0.0.0
+      - FASTAPI_URL=http://fleetwatch-backend:8001
+      - DATABASE_URL=postgresql://fleetwatch_admin:highveld_fleet_secret_2026@fleetwatch-db:5432/fleetwatch
+      - REDIS_URL=redis://fleetwatch-redis:6379
+    volumes:
+      - ./mobile:/app/mobile:ro
+    depends_on:
+      fleetwatch-db:
+        condition: service_healthy
+      fleetwatch-redis:
+        condition: service_healthy
+      fleetwatch-backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:4000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 3. Python FastAPI Compliance, Ingress & Dispatch Gateway
+  # ----------------------------------------------------------------------------
+  fleetwatch-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: fleetwatch-backend
+    restart: always
+    ports:
+      - "${BACKEND_PORT:-8011}:8001"
+    env_file:
+      - .env
+    environment:
+      - PORT=8001
+      - HOST=0.0.0.0
+    volumes:
+      - ./backend:/app/backend
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  # ----------------------------------------------------------------------------
+  # 4. PostGIS 16 Spatial Database (Free FOSS Routing & Geospatial Ingress)
+  # ----------------------------------------------------------------------------
+  fleetwatch-db:
+    image: postgis/postgis:16-3.4-alpine
+    container_name: fleetwatch-postgis
+    restart: always
+    environment:
+      POSTGRES_DB: fleetwatch
+      POSTGRES_USER: fleetwatch_admin
+      POSTGRES_PASSWORD: highveld_fleet_secret_2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - fleetwatch_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleetwatch_admin -d fleetwatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # 5. Redis 7 High-Throughput In-Memory Telemetry Buffer
+  # ----------------------------------------------------------------------------
+  fleetwatch-redis:
+    image: redis:7-alpine
+    container_name: fleetwatch-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - fleetwatch_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  fleetwatch_pgdata:
+  fleetwatch_redisdata:
