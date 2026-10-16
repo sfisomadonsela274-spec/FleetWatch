@@ -7143,12 +7143,12 @@
     function initBackendSocketSync() {
       if (typeof io === 'undefined') return;
       try {
-        const socketHost = (window.location.port === '4000') ? window.location.origin : 'http://localhost:4000';
+        const socketHost = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : 'http://localhost:4000';
         const socket = io(socketHost, { timeout: 3000, reconnectionAttempts: 5 });
 
         socket.on('connect', () => {
           console.log(`[FleetWatch] Connected to real-time telemetry backend at ${socketHost}`);
-          showToast('⚡ Live Real-Time Telemetry Backend Connected (Port 4000)', 'success');
+          showToast('⚡ Live Real-Time Telemetry Cloud Backend Connected', 'success');
         });
 
         socket.on('fleet:alert_triggered', alert => {

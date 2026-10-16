@@ -17,7 +17,7 @@ object AppPreferences {
     private const val KEY_BEARER_TOKEN = "key_bearer_token"
     private const val KEY_API_BASE_URL = "key_api_base_url"
 
-    private const val DEFAULT_API_BASE_URL = "http://127.0.0.1:8001"
+    private const val DEFAULT_API_BASE_URL = "https://fleetwatch-an0h.onrender.com"
     private const val DEFAULT_TOKEN = "fleetsentinel_pilot_secret_token_2026"
 
     private fun getPrefs(context: Context): SharedPreferences {

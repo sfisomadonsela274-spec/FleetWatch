@@ -285,7 +285,7 @@
                 android:id="@+id/etServerUrl"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="http://127.0.0.1:8001"
+                android:text="https://fleetwatch-an0h.onrender.com"
                 android:textColor="@color/text_main"
                 android:textSize="13sp"
                 android:fontFamily="monospace"
