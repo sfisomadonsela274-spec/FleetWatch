@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: fleetwatch
+    runtime: docker
+    plan: free
+    region: frankfurt
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: FASTAPI_URL
+        value: http://127.0.0.1:8001
+      - key: APK_DOWNLOAD_URL
+        value: https://github.com/sfisomadonsela274-spec/FleetWatch/releases/download/v1.0.0/FleetSentinel-Driver.apk
