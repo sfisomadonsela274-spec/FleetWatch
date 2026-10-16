@@ -10,6 +10,8 @@ services:
     envVars:
       - key: PORT
         value: 8080
+      - key: NODE_PORT
+        value: 4000
       - key: FASTAPI_URL
         value: http://127.0.0.1:8001
       - key: APK_DOWNLOAD_URL

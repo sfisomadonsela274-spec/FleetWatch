@@ -2,8 +2,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const CONFIG = {
-  PORT: process.env.PORT || 4000,
-  HOST: process.env.HOST || '0.0.0.0',
+  PORT: process.env.NODE_PORT || (process.env.PORT && process.env.PORT !== '8080' ? process.env.PORT : 4000),
+  HOST: process.env.NODE_HOST || '0.0.0.0',
   JWT_SECRET: process.env.JWT_SECRET || 'highveld_fleetwatch_jwt_secret_key_2026',
   DATABASE_URL: process.env.DATABASE_URL || 'postgresql://fleetwatch_admin:highveld_fleet_secret_2026@localhost:5432/fleetwatch',
   REDIS_URL: process.env.REDIS_URL || 'redis://localhost:6379',
