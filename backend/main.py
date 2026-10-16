@@ -1,3 +1,4 @@
+import os
 import asyncio
 from pathlib import Path
 import json
@@ -116,11 +117,13 @@ class EmailTestRequest(BaseModel):
     to_email: str = Field(..., json_schema_extra={"example": "sfiso@fleetwatch.co.za"})
 
 class EmailConfigureRequest(BaseModel):
-    smtp_host: str = Field(..., json_schema_extra={"example": "smtp.gmail.com"})
-    smtp_port: int = Field(default=587, json_schema_extra={"example": 587})
-    smtp_user: str = Field(..., json_schema_extra={"example": "dispatch@fleetwatch.co.za"})
-    smtp_pass: str = Field(..., json_schema_extra={"example": "app-password-here"})
-    from_email: Optional[str] = Field(default="dispatch@fleetwatch.co.za")
+    provider: Optional[str] = Field(default=None, json_schema_extra={"example": "brevo"})
+    brevo_api_key: Optional[str] = Field(default=None, json_schema_extra={"example": "xkeysib-..."})
+    smtp_host: Optional[str] = Field(default="smtp.gmail.com", json_schema_extra={"example": "smtp.gmail.com"})
+    smtp_port: Optional[int] = Field(default=587, json_schema_extra={"example": 587})
+    smtp_user: Optional[str] = Field(default=None, json_schema_extra={"example": "sfisomadonsela274@gmail.com"})
+    smtp_pass: Optional[str] = Field(default=None, json_schema_extra={"example": "app-password-here"})
+    from_email: Optional[str] = Field(default="sfisomadonsela274@gmail.com")
     from_name: Optional[str] = Field(default="FleetWatch Operations")
 
 # In-Memory Event Queue for Real-Time SSE Streaming to Desktop Cockpit
@@ -450,13 +453,13 @@ def get_email_status():
 @app.post("/api/v1/email/test")
 def test_email_delivery(req: EmailTestRequest):
     """
-    Sends a test verification email to verify SMTP gateway functionality.
+    Sends a test verification email to verify Brevo / SMTP gateway functionality.
     """
     if not email_gateway.is_valid_email(req.to_email):
         raise HTTPException(status_code=400, detail="Invalid recipient email address")
     result = email_gateway.send_test_email(req.to_email)
     return {
-        "success": result.get("status") in ("DELIVERED_SMTP", "DELIVERED_MOCK"),
+        "success": result.get("status") in ("DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"),
         "delivery": result,
         "message": f"Test email dispatched to {req.to_email} ({result.get('status')})"
     }
@@ -464,7 +467,7 @@ def test_email_delivery(req: EmailTestRequest):
 @app.post("/api/v1/email/configure")
 def configure_email_gateway(req: EmailConfigureRequest):
     """
-    Updates SMTP gateway configuration, persists to .env, and reloads service.
+    Updates Brevo / SMTP gateway configuration, persists to .env, and reloads service.
     """
     env_file = Path(__file__).parent.parent / ".env"
 
@@ -477,17 +480,31 @@ def configure_email_gateway(req: EmailConfigureRequest):
                     k, v = line.split("=", 1)
                     existing_vars[k.strip()] = v.strip()
 
-    existing_vars["SMTP_HOST"] = req.smtp_host
-    existing_vars["SMTP_PORT"] = str(req.smtp_port)
-    existing_vars["SMTP_USER"] = req.smtp_user
-    if "gmail" in req.smtp_host.lower():
-        existing_vars["SMTP_PASS"] = req.smtp_pass.replace(" ", "").strip()
-    else:
-        existing_vars["SMTP_PASS"] = req.smtp_pass.strip()
+    if req.provider is not None:
+        existing_vars["EMAIL_PROVIDER"] = req.provider.strip().lower()
+        os.environ["EMAIL_PROVIDER"] = req.provider.strip().lower()
+    if req.brevo_api_key is not None:
+        existing_vars["BREVO_API_KEY"] = req.brevo_api_key.strip()
+        os.environ["BREVO_API_KEY"] = req.brevo_api_key.strip()
+    if req.smtp_host is not None:
+        existing_vars["SMTP_HOST"] = req.smtp_host.strip()
+        os.environ["SMTP_HOST"] = req.smtp_host.strip()
+    if req.smtp_port is not None:
+        existing_vars["SMTP_PORT"] = str(req.smtp_port)
+        os.environ["SMTP_PORT"] = str(req.smtp_port)
+    if req.smtp_user is not None:
+        existing_vars["SMTP_USER"] = req.smtp_user.strip()
+        os.environ["SMTP_USER"] = req.smtp_user.strip()
+    if req.smtp_pass is not None:
+        clean_pass = req.smtp_pass.replace(" ", "").strip() if (req.smtp_host and "gmail" in req.smtp_host.lower()) else req.smtp_pass.strip()
+        existing_vars["SMTP_PASS"] = clean_pass
+        os.environ["SMTP_PASS"] = clean_pass
     if req.from_email:
-        existing_vars["EMAIL_FROM"] = req.from_email
+        existing_vars["EMAIL_FROM"] = req.from_email.strip()
+        os.environ["EMAIL_FROM"] = req.from_email.strip()
     if req.from_name:
-        existing_vars["EMAIL_FROM_NAME"] = req.from_name
+        existing_vars["EMAIL_FROM_NAME"] = req.from_name.strip()
+        os.environ["EMAIL_FROM_NAME"] = req.from_name.strip()
 
     with open(env_file, "w") as f:
         for k, v in existing_vars.items():
@@ -495,9 +512,10 @@ def configure_email_gateway(req: EmailConfigureRequest):
 
     email_gateway.reload_config()
 
+    target_desc = "Brevo HTTP API (Port 443)" if (req.provider == "brevo" or (req.brevo_api_key and req.provider != "smtp")) else f"SMTP ({req.smtp_host}:{req.smtp_port})"
     return {
         "success": True,
-        "message": f"SMTP configuration saved and reloaded for {req.smtp_host}:{req.smtp_port}",
+        "message": f"Email configuration saved and reloaded for {target_desc}",
         "status": email_gateway.get_status()
     }
 

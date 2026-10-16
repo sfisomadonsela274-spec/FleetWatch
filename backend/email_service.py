@@ -9,6 +9,7 @@ import os
 import re
 import smtplib
 import logging
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
@@ -36,6 +37,8 @@ class EmailService:
 
     def reload_config(self):
         load_dotenv(ENV_PATH, override=True)
+        self.provider_pref = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+        self.brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
         self.smtp_host = os.getenv("SMTP_HOST", "").strip()
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER", "").strip()
@@ -44,17 +47,36 @@ class EmailService:
             self.smtp_pass = raw_pass.replace(" ", "")
         else:
             self.smtp_pass = raw_pass
-        self.from_email = os.getenv("EMAIL_FROM", "dispatch@fleetwatch.co.za").strip()
+        self.from_email = os.getenv("EMAIL_FROM", "sfisomadonsela274@gmail.com").strip()
         self.from_name = os.getenv("EMAIL_FROM_NAME", "FleetWatch Operations").strip()
-        is_live = bool(self.smtp_host and self.smtp_user)
-        logger.info(f"Initialized Email Gateway: mode={'LIVE_SMTP (' + self.smtp_host + ')' if is_live else 'LOCAL_SIMULATION'}")
+        
+        # Resolve active delivery channel
+        if self.provider_pref == "smtp" and self.smtp_host and self.smtp_user:
+            self.active_mode = "LIVE_SMTP"
+        elif self.provider_pref == "brevo" and self.brevo_api_key:
+            self.active_mode = "BREVO_API"
+        elif self.brevo_api_key:
+            self.active_mode = "BREVO_API"
+        elif self.smtp_host and self.smtp_user:
+            self.active_mode = "LIVE_SMTP"
+        else:
+            self.active_mode = "LOCAL_SIMULATION"
+            
+        logger.info(f"Initialized Email Gateway: active_mode={self.active_mode} (pref={self.provider_pref or 'auto'})")
 
     def get_status(self) -> dict:
-        is_configured = bool(self.smtp_host and self.smtp_user)
+        is_brevo = bool(self.brevo_api_key)
+        is_smtp = bool(self.smtp_host and self.smtp_user)
+        is_configured = self.active_mode in ("BREVO_API", "LIVE_SMTP")
+        
         return {
             "configured": is_configured,
-            "mode": "LIVE_SMTP" if is_configured else "LOCAL_SIMULATION",
-            "smtp_host": self.smtp_host if is_configured else "smtp.gmail.com (Default preset)",
+            "mode": self.active_mode,
+            "provider_pref": self.provider_pref or ("brevo" if is_brevo else ("smtp" if is_smtp else "auto")),
+            "provider": "Brevo HTTP API" if self.active_mode == "BREVO_API" else ("SMTP Gateway" if self.active_mode == "LIVE_SMTP" else "Local Simulation"),
+            "brevo_configured": is_brevo,
+            "smtp_configured": is_smtp,
+            "smtp_host": self.smtp_host if is_smtp else "smtp.gmail.com (Default preset)",
             "smtp_port": self.smtp_port,
             "from_email": self.from_email,
             "from_name": self.from_name,
@@ -80,13 +102,44 @@ class EmailService:
             "status": "SENT"
         }
 
-        if not self.smtp_host or not self.smtp_user:
-            # Local Simulation / Dev Mode
-            logger.info(f"📧 [OUTBOUND EMAIL (SIMULATION)] To: {clean_to}")
-            logger.info(f"   Subject: \"{subject}\"")
-            logger.info(f"   Status: Delivered (Local Simulation / Dev)")
-            record["status"] = "DELIVERED_MOCK"
-        else:
+        # 1. Preferred Cloud Delivery: Brevo HTTP API (Port 443 - Bypasses Render Port 587 Block)
+        if self.active_mode == "BREVO_API" and self.brevo_api_key:
+            try:
+                url = "https://api.brevo.com/v3/smtp/email"
+                headers = {
+                    "accept": "application/json",
+                    "api-key": self.brevo_api_key,
+                    "content-type": "application/json"
+                }
+                payload = {
+                    "sender": {
+                        "name": self.from_name or "FleetWatch Operations",
+                        "email": self.from_email or "sfisomadonsela274@gmail.com"
+                    },
+                    "to": [
+                        {"email": clean_to}
+                    ],
+                    "subject": subject,
+                    "htmlContent": html_body,
+                    "textContent": text_body
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=12)
+                if resp.status_code in (200, 201, 202):
+                    logger.info(f"✅ Brevo HTTP delivery succeeded to {clean_to}")
+                    record["status"] = "DELIVERED_BREVO"
+                    record["message_id"] = resp.json().get("messageId", "")
+                else:
+                    err_msg = f"Brevo HTTP {resp.status_code}: {resp.text}"
+                    logger.error(f"❌ Brevo delivery error to {clean_to}: {err_msg}")
+                    record["status"] = "FAILED"
+                    record["error"] = err_msg
+            except Exception as e:
+                logger.error(f"❌ Brevo delivery exception to {clean_to}: {e}")
+                record["status"] = "FAILED"
+                record["error"] = str(e)
+
+        # 2. Traditional SMTP Delivery (Port 587 / 465 for local dev or unblocked servers)
+        elif self.active_mode == "LIVE_SMTP" and self.smtp_host and self.smtp_user:
             try:
                 msg = MIMEMultipart("alternative")
                 msg["Subject"] = subject
@@ -115,20 +168,32 @@ class EmailService:
                 record["status"] = "FAILED"
                 record["error"] = str(e)
 
+        # 3. Local Simulation / Dev Mode
+        else:
+            logger.info(f"📧 [OUTBOUND EMAIL (SIMULATION)] To: {clean_to}")
+            logger.info(f"   Subject: \"{subject}\"")
+            logger.info(f"   Status: Delivered (Local Simulation / Dev)")
+            record["status"] = "DELIVERED_MOCK"
+
         self.sent_emails.insert(0, record)
         if len(self.sent_emails) > 100:
             self.sent_emails.pop()
         return record
 
     def send_test_email(self, to_email: str) -> dict:
-        subject = "🧪 FleetWatch Live SMTP Verification Test"
+        if self.active_mode == "BREVO_API":
+            provider_name = "Brevo HTTP API (Port 443)"
+        elif self.active_mode == "LIVE_SMTP":
+            provider_name = f"SMTP ({self.smtp_host}:{self.smtp_port})"
+        else:
+            provider_name = "Local Simulation"
+        subject = "🧪 FleetWatch Live Email Verification Test"
         text_body = f"""
-FleetWatch Telematics - Live SMTP Gateway Test
+FleetWatch Telematics - Live Email Gateway Test
 ==============================================
-This test email confirms that your SMTP gateway is actively configured and operational.
+This test email confirms that your email gateway is actively configured and operational.
 
-Gateway Host: {self.smtp_host or 'Local Simulation'}
-Gateway Port: {self.smtp_port}
+Provider: {provider_name}
 From: {self.from_name} <{self.from_email}>
 Timestamp: {datetime.now(timezone.utc).isoformat()}
 
@@ -141,17 +206,16 @@ Your driver dispatch passes and 6-digit in-cab OTP codes are now ready for live 
   <div style="max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 28px; border: 1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
     <div style="background: #0f172a; color: white; padding: 18px; border-radius: 12px; text-align: center; margin-bottom: 20px;">
       <h2 style="margin: 0; font-size: 18px;">🛡️ FleetWatch Operations</h2>
-      <p style="margin: 4px 0 0 0; font-size: 12px; color: #34d399;">Live SMTP Gateway Verification</p>
+      <p style="margin: 4px 0 0 0; font-size: 12px; color: #34d399;">Live Email Gateway Verification</p>
     </div>
     <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 14px; margin-bottom: 18px; text-align: center;">
-      <span style="font-size: 14px; font-weight: bold; color: #065f46;">✅ Real SMTP Delivery Connected</span>
+      <span style="font-size: 14px; font-weight: bold; color: #065f46;">✅ Real Delivery Connected ({provider_name})</span>
     </div>
     <p style="font-size: 13px; line-height: 1.6; color: #334155;">
       Your outbound email provider is now operational. Dispatched drivers will receive rich HTML boarding passes with immediate 6-digit in-cab OTP codes.
     </p>
     <table style="width: 100%; font-size: 12px; font-family: monospace; background: #f1f5f9; border-radius: 8px; padding: 10px; margin: 16px 0;">
-      <tr><td style="color: #64748b;">Host:</td><td style="font-weight: bold; color: #0f172a;">{self.smtp_host}</td></tr>
-      <tr><td style="color: #64748b;">Port:</td><td style="font-weight: bold; color: #0f172a;">{self.smtp_port}</td></tr>
+      <tr><td style="color: #64748b;">Provider:</td><td style="font-weight: bold; color: #0f172a;">{provider_name}</td></tr>
       <tr><td style="color: #64748b;">Sender:</td><td style="font-weight: bold; color: #0f172a;">{self.from_email}</td></tr>
     </table>
     <p style="font-size: 11px; color: #94a3b8; text-align: center; margin-top: 20px; border-top: 1px solid #f1f5f9; padding-top: 14px;">

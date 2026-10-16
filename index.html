@@ -3156,57 +3156,94 @@
           <span id="smtp-status-host" class="font-mono text-[11px] text-slate-500">Ready for credentials</span>
         </div>
 
-        <!-- Quick Provider Presets -->
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1.5">Quick Provider Presets</label>
-          <div class="grid grid-cols-4 gap-2 text-xs">
-            <button type="button" onclick="applySmtpPreset('gmail')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
-              Gmail
+        <!-- Provider Selection Tabs -->
+        <div class="border-b border-slate-200 pb-2">
+          <div class="flex items-center space-x-2 text-xs">
+            <button type="button" id="email-tab-btn-brevo" onclick="switchEmailProviderTab('brevo')"
+              class="py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm">
+              🚀 Brevo API (Cloud Port 443)
             </button>
-            <button type="button" onclick="applySmtpPreset('sendgrid')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
-              SendGrid
-            </button>
-            <button type="button" onclick="applySmtpPreset('postmark')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
-              Postmark
-            </button>
-            <button type="button" onclick="applySmtpPreset('custom')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
-              Custom
+            <button type="button" id="email-tab-btn-smtp" onclick="switchEmailProviderTab('smtp')"
+              class="py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition">
+              ✉️ Traditional SMTP
             </button>
           </div>
         </div>
 
         <!-- Configuration Form -->
         <form id="smtp-config-form" onsubmit="handleSaveSmtpConfig(event)" class="space-y-3 text-xs overflow-y-auto pr-1">
-          <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-2">
-              <label class="block font-semibold text-slate-700 mb-1">SMTP Host</label>
-              <input required id="smtp-input-host" type="text" placeholder="e.g. smtp.gmail.com"
+          <!-- 1. Brevo HTTP API Pane -->
+          <div id="email-pane-brevo" class="space-y-3">
+            <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold text-emerald-900 text-xs">Recommended for Cloud Deployments (Render / Cloudflare)</span>
+                <span class="text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">300 Free/Day</span>
+              </div>
+              <p class="text-[11px] text-emerald-800 leading-relaxed">
+                Connects directly to <strong>api.brevo.com over HTTPS (Port 443)</strong>, completely bypassing Render's outbound SMTP port 587 block.
+              </p>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">Brevo API Key (v3)</label>
+              <input id="brevo-input-key" type="password" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx"
+                class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
+              <p class="text-[10px] text-slate-400 mt-1">Get your free key from <strong>Brevo Dashboard &gt; SMTP &amp; API &gt; API Keys &gt; Generate a new API key</strong>.</p>
+            </div>
+          </div>
+
+          <!-- 2. Traditional SMTP Pane -->
+          <div id="email-pane-smtp" class="space-y-3 hidden">
+            <!-- Quick Provider Presets -->
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1.5">SMTP Presets (Note: Blocked on Render Free Tier)</label>
+              <div class="grid grid-cols-4 gap-2 text-xs">
+                <button type="button" onclick="applySmtpPreset('gmail')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
+                  Gmail
+                </button>
+                <button type="button" onclick="applySmtpPreset('sendgrid')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
+                  SendGrid
+                </button>
+                <button type="button" onclick="applySmtpPreset('postmark')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
+                  Postmark
+                </button>
+                <button type="button" onclick="applySmtpPreset('custom')" class="py-1.5 px-2 rounded-lg border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 font-semibold text-slate-700 text-center transition">
+                  Custom
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div class="col-span-2">
+                <label class="block font-semibold text-slate-700 mb-1">SMTP Host</label>
+                <input id="smtp-input-host" type="text" placeholder="e.g. smtp.gmail.com"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1">Port</label>
+                <input id="smtp-input-port" type="number" value="587"
+                  class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">SMTP Username / Email</label>
+              <input id="smtp-input-user" type="text" placeholder="e.g. your_email@gmail.com"
+                class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 shadow-inner">
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">SMTP Password / App Password</label>
+              <input id="smtp-input-pass" type="password" placeholder="16-character App Password"
                 class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
             </div>
+          </div>
+
+          <!-- Common Sender Info -->
+          <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
             <div>
-              <label class="block font-semibold text-slate-700 mb-1">Port</label>
-              <input required id="smtp-input-port" type="number" value="587"
-                class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
-            </div>
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">SMTP Username / API Key</label>
-            <input required id="smtp-input-user" type="text" placeholder="e.g. your_email@gmail.com or apikey"
-              class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 shadow-inner">
-          </div>
-
-          <div>
-            <label class="block font-semibold text-slate-700 mb-1">SMTP Password / Secret / App Password</label>
-            <input required id="smtp-input-pass" type="password" placeholder="16-char App Password or API Token"
-              class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
-            <p class="text-[10px] text-slate-400 mt-0.5">For Gmail, use a 16-character App Password (Google Account &gt; Security &gt; 2-Step Verification &gt; App Passwords).</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="block font-semibold text-slate-700 mb-1">From Email</label>
-              <input id="smtp-input-from" type="email" placeholder="dispatch@fleetwatch.co.za"
+              <label class="block font-semibold text-slate-700 mb-1">From Email (Verified Sender)</label>
+              <input id="smtp-input-from" type="email" placeholder="sfisomadonsela274@gmail.com"
                 class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 shadow-inner">
             </div>
             <div>
@@ -3218,7 +3255,7 @@
 
           <div class="pt-2 flex items-center justify-between border-t border-slate-100">
             <div class="flex items-center space-x-1.5">
-              <input id="smtp-test-recipient" type="email" placeholder="test@yourinbox.com"
+              <input id="smtp-test-recipient" type="email" placeholder="recipient@example.com"
                 class="px-2.5 py-1.5 text-xs rounded-lg bg-slate-50 border border-slate-200 focus:outline-none text-slate-900 w-44">
               <button type="button" onclick="handleSendTestEmail()" id="smtp-test-btn"
                 class="soft-button-bright px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-emerald-700">
@@ -6857,6 +6894,36 @@
       loadSmtpStatus();
     }
 
+    let currentEmailProvider = 'brevo';
+
+    function switchEmailProviderTab(provider) {
+      currentEmailProvider = provider;
+      const brevoTabBtn = document.getElementById('email-tab-btn-brevo');
+      const smtpTabBtn = document.getElementById('email-tab-btn-smtp');
+      const brevoPane = document.getElementById('email-pane-brevo');
+      const smtpPane = document.getElementById('email-pane-smtp');
+
+      if (provider === 'brevo') {
+        if (brevoTabBtn) {
+          brevoTabBtn.className = 'py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm';
+        }
+        if (smtpTabBtn) {
+          smtpTabBtn.className = 'py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition';
+        }
+        if (brevoPane) brevoPane.classList.remove('hidden');
+        if (smtpPane) smtpPane.classList.add('hidden');
+      } else {
+        if (brevoTabBtn) {
+          brevoTabBtn.className = 'py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition';
+        }
+        if (smtpTabBtn) {
+          smtpTabBtn.className = 'py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm';
+        }
+        if (brevoPane) brevoPane.classList.add('hidden');
+        if (smtpPane) smtpPane.classList.remove('hidden');
+      }
+    }
+
     function closeSmtpConfigModal() {
       const modal = document.getElementById('modal-smtp-config');
       if (modal) modal.classList.add('hidden');
@@ -6905,19 +6972,29 @@
       const userInput = document.getElementById('smtp-input-user');
       const fromInput = document.getElementById('smtp-input-from');
       const fromNameInput = document.getElementById('smtp-input-from-name');
+      const brevoKeyInput = document.getElementById('brevo-input-key');
 
       try {
         const res = await fetch(`${API_BASE}/api/v1/email/status`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        if (data.configured && data.mode === 'LIVE_SMTP') {
+        if (data.mode === 'BREVO_API' || data.brevo_configured) {
+          if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+          if (text) text.textContent = 'Mode: Brevo HTTP API (Port 443 Active)';
+          if (host) host.textContent = 'api.brevo.com (HTTPS)';
+          if (banner) {
+            banner.className = 'p-3 rounded-xl border text-xs flex items-center justify-between bg-emerald-50/80 border-emerald-200 text-emerald-900';
+          }
+          switchEmailProviderTab('brevo');
+        } else if (data.configured && data.mode === 'LIVE_SMTP') {
           if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
           if (text) text.textContent = 'Mode: Live SMTP Active (Authenticated)';
           if (host) host.textContent = `${data.smtp_host}:${data.smtp_port}`;
           if (banner) {
             banner.className = 'p-3 rounded-xl border text-xs flex items-center justify-between bg-emerald-50/80 border-emerald-200 text-emerald-900';
           }
+          switchEmailProviderTab('smtp');
         } else {
           if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500';
           if (text) text.textContent = 'Mode: Local Simulation (Mock Delivery)';
@@ -6947,21 +7024,34 @@
       const passInput = document.getElementById('smtp-input-pass');
       const fromInput = document.getElementById('smtp-input-from');
       const fromNameInput = document.getElementById('smtp-input-from-name');
+      const brevoKeyInput = document.getElementById('brevo-input-key');
 
-      if (!hostInput || !userInput || !passInput) return;
-
-      const payload = {
-        smtp_host: hostInput.value.trim(),
-        smtp_port: parseInt(portInput.value, 10) || 587,
-        smtp_user: userInput.value.trim(),
-        smtp_pass: passInput.value,
+      let payload = {
         from_email: fromInput && fromInput.value.trim() ? fromInput.value.trim() : undefined,
         from_name: fromNameInput && fromNameInput.value.trim() ? fromNameInput.value.trim() : undefined
       };
 
-      if (!payload.smtp_host || !payload.smtp_user || !payload.smtp_pass) {
-        showToast('Please fill in Host, Username, and Password', 'warning');
-        return;
+      if (currentEmailProvider === 'brevo') {
+        const key = brevoKeyInput ? brevoKeyInput.value.trim() : '';
+        if (!key) {
+          showToast('Please enter your Brevo API key (v3)', 'warning');
+          if (brevoKeyInput) brevoKeyInput.focus();
+          return;
+        }
+        payload.provider = 'brevo';
+        payload.brevo_api_key = key;
+      } else {
+        if (!hostInput || !userInput || !passInput) return;
+        payload.provider = 'smtp';
+        payload.smtp_host = hostInput.value.trim();
+        payload.smtp_port = parseInt(portInput.value, 10) || 587;
+        payload.smtp_user = userInput.value.trim();
+        payload.smtp_pass = passInput.value;
+
+        if (!payload.smtp_host || !payload.smtp_user || !payload.smtp_pass) {
+          showToast('Please fill in Host, Username, and Password', 'warning');
+          return;
+        }
       }
 
       if (saveBtn) {
@@ -6979,10 +7069,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to save configuration');
 
-        showToast('SMTP settings saved! Backend reloaded successfully.', 'success');
+        showToast('Email settings saved! Backend reloaded successfully.', 'success');
         await loadSmtpStatus();
       } catch (err) {
-        console.error('Error saving SMTP config:', err);
+        console.error('Error saving email config:', err);
         showToast(`Save failed: ${err.message}`, 'error');
       } finally {
         if (saveBtn) {
@@ -6996,10 +7086,11 @@
       const recipientInput = document.getElementById('smtp-test-recipient');
       const testBtn = document.getElementById('smtp-test-btn');
       const userInput = document.getElementById('smtp-input-user');
+      const fromInput = document.getElementById('smtp-input-from');
 
       let recipient = recipientInput ? recipientInput.value.trim() : '';
-      if (!recipient && userInput && userInput.value.includes('@')) {
-        recipient = userInput.value.trim();
+      if (!recipient && fromInput && fromInput.value.includes('@')) {
+        recipient = fromInput.value.trim();
         if (recipientInput) recipientInput.value = recipient;
       }
 
@@ -7024,10 +7115,15 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Test dispatch rejected');
 
-        if (data.delivery && data.delivery.status === 'DELIVERED_SMTP') {
-          showToast(`Live email delivered to ${recipient}! Check inbox.`, 'success');
+        const status = data.delivery ? data.delivery.status : '';
+        if (status === 'DELIVERED_BREVO') {
+          showToast(`🚀 Live email delivered via Brevo (Port 443) to ${recipient}! Check inbox.`, 'success');
+        } else if (status === 'DELIVERED_SMTP') {
+          showToast(`✉️ Live email delivered via SMTP to ${recipient}! Check inbox.`, 'success');
+        } else if (status === 'FAILED') {
+          showToast(`Delivery failed: ${data.delivery.error || 'Check credentials'}`, 'error');
         } else {
-          showToast(`Simulation mock logged (Mode: ${data.delivery ? data.delivery.status : 'MOCK'}). Configure SMTP credentials for live delivery.`, 'info');
+          showToast(`Simulation mock logged (Mode: ${status || 'MOCK'}). Configure Brevo or SMTP for live delivery.`, 'info');
         }
         if (typeof fetchAndRenderSmsLogs === 'function') fetchAndRenderSmsLogs();
       } catch (err) {

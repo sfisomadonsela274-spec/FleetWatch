@@ -42,3 +42,8 @@ Thumbs.db
 
 # Scratch files
 scratch/
+
+# Mobile & Gradle caches
+.gradle/
+**/build/
+*.apk
