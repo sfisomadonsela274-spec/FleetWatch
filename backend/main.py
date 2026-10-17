@@ -1,9 +1,12 @@
 import os
 import asyncio
+import logging
 from pathlib import Path
 import json
 from datetime import datetime, timezone
 from typing import List, Optional
+
+logger = logging.getLogger("fleet_main")
 from fastapi import FastAPI, HTTPException, Security, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
@@ -83,6 +86,8 @@ class DispatchRequest(BaseModel):
     driver_name: Optional[str] = Field(default="Driver", json_schema_extra={"example": "Thabo Mokoena"})
     model: Optional[str] = Field(default="Scania R500 V8", json_schema_extra={"example": "Volvo FH16 610"})
     fuel_liters: Optional[float] = Field(default=450.0, json_schema_extra={"example": 450.0})
+    destination: Optional[str] = Field(default="N4 Highveld Corridor", json_schema_extra={"example": "Witbank Central Coal Freight Terminal"})
+    origin: Optional[str] = Field(default="Pretoria East Depot", json_schema_extra={"example": "Pretoria East Depot"})
 
 class RequestOtpRequest(BaseModel):
     phone_number: Optional[str] = Field(default="", json_schema_extra={"example": "082 555 1290"})
@@ -297,14 +302,19 @@ async def dispatch_truck(req: DispatchRequest):
     Fleet Manager dispatches vehicle via driver cell number or email.
     Generates 6-digit in-cab OTP code immediately and dispatches via SMS and/or Email.
     """
-    record = DatabaseManager.dispatch_unit(
-        truck_reg=req.truck_reg,
-        driver_phone=req.driver_phone or "",
-        driver_name=req.driver_name or "Driver",
-        model=req.model or "Scania R500 V8",
-        fuel_liters=req.fuel_liters or 450.0,
-        driver_email=req.driver_email or ""
-    )
+    try:
+        record = DatabaseManager.dispatch_unit(
+            truck_reg=req.truck_reg,
+            driver_phone=req.driver_phone or "",
+            driver_name=req.driver_name or "Driver",
+            model=req.model or "Scania R500 V8",
+            fuel_liters=req.fuel_liters or 450.0,
+            driver_email=req.driver_email or ""
+        )
+    except Exception as e:
+        logger.error(f"Failed to record vehicle dispatch in database: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Database dispatch error: {str(e)}")
+
     unit = DatabaseManager.get_unit(record["driver_id"])
 
     # Download URL for the driver APK (dynamic via settings / .env)
@@ -313,21 +323,29 @@ async def dispatch_truck(req: DispatchRequest):
     email_res = None
 
     if record.get("driver_phone"):
-        sms_res = sms_gateway.send_dispatch_invite(
-            to_phone=record["driver_phone"],
-            truck_reg=record["truck_reg"],
-            driver_name=record["driver_name"],
-            download_url=download_url
-        )
+        try:
+            sms_res = sms_gateway.send_dispatch_invite(
+                to_phone=record["driver_phone"],
+                truck_reg=record["truck_reg"],
+                driver_name=record["driver_name"],
+                download_url=download_url
+            )
+        except Exception as e:
+            logger.error(f"SMS dispatch failed for {record['driver_phone']}: {e}")
+            sms_res = {"status": "FAILED", "error": str(e)}
 
     if record.get("driver_email"):
-        email_res = email_gateway.send_dispatch_invite(
-            to_email=record["driver_email"],
-            truck_reg=record["truck_reg"],
-            driver_name=record["driver_name"],
-            download_url=download_url,
-            otp_code=record["otp_code"]
-        )
+        try:
+            email_res = email_gateway.send_dispatch_invite(
+                to_email=record["driver_email"],
+                truck_reg=record["truck_reg"],
+                driver_name=record["driver_name"],
+                download_url=download_url,
+                otp_code=record["otp_code"]
+            )
+        except Exception as e:
+            logger.error(f"Email dispatch failed for {record['driver_email']}: {e}")
+            email_res = {"status": "FAILED", "error": str(e)}
 
     await broadcast_event("unit_dispatched", {
         "unit": unit,
@@ -337,8 +355,16 @@ async def dispatch_truck(req: DispatchRequest):
     })
 
     delivery_channels = []
-    if sms_res: delivery_channels.append(f"SMS to {record['driver_phone']}")
-    if email_res: delivery_channels.append(f"Email to {record['driver_email']}")
+    if sms_res and sms_res.get("status") in ("DELIVERED_SMS", "SENT"):
+        delivery_channels.append(f"SMS to {record['driver_phone']}")
+    elif sms_res:
+        delivery_channels.append(f"SMS: {sms_res.get('status')}")
+
+    if email_res and email_res.get("status") in ("DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"):
+        delivery_channels.append(f"Email to {record['driver_email']}")
+    elif email_res:
+        delivery_channels.append(f"Email: {email_res.get('status')} ({email_res.get('error', '')})")
+
     channel_text = " & ".join(delivery_channels) if delivery_channels else "Direct On-Screen Code Generated"
 
     return {

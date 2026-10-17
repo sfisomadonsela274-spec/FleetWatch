@@ -25,6 +25,8 @@ def init_db():
         driver_id TEXT PRIMARY KEY,
         truck_reg TEXT NOT NULL,
         driver_name TEXT,
+        driver_phone TEXT NOT NULL DEFAULT '',
+        driver_email TEXT NOT NULL DEFAULT '',
         model TEXT,
         lat REAL NOT NULL,
         lng REAL NOT NULL,
@@ -45,27 +47,6 @@ def init_db():
         status TEXT NOT NULL DEFAULT 'ACTIVE'
     );
     """)
-
-    # Ensure status & driver_phone columns exist for legacy databases
-    try:
-        cursor.execute("ALTER TABLE fleet_units ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE fleet_units ADD COLUMN driver_phone TEXT NOT NULL DEFAULT '';")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE fleet_units ADD COLUMN driver_email TEXT NOT NULL DEFAULT '';")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE driver_otps ADD COLUMN driver_email TEXT NOT NULL DEFAULT '';")
-    except sqlite3.OperationalError:
-        pass
 
     # 2. Append-Only Exception Ledger: alerts_log
     cursor.execute("""
@@ -94,16 +75,18 @@ def init_db():
         truck_reg TEXT NOT NULL,
         driver_name TEXT NOT NULL,
         driver_phone TEXT,
+        driver_email TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         expires_at TEXT NOT NULL,
         is_used INTEGER NOT NULL DEFAULT 0
     );
     """)
 
-    # 4. Cellular SMS OTP Verification Codes
+    # 4. Cellular SMS & Email OTP Verification Codes
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS driver_otps (
-        phone_number TEXT NOT NULL,
+        phone_number TEXT NOT NULL DEFAULT '',
+        driver_email TEXT NOT NULL DEFAULT '',
         otp_code TEXT NOT NULL,
         driver_id TEXT NOT NULL,
         truck_reg TEXT NOT NULL,
@@ -112,6 +95,21 @@ def init_db():
         is_used INTEGER NOT NULL DEFAULT 0
     );
     """)
+
+    # 5. Schema Migrations for Legacy / Pre-existing Databases
+    migrations = [
+        ("fleet_units", "status", "TEXT NOT NULL DEFAULT 'ACTIVE'"),
+        ("fleet_units", "driver_phone", "TEXT NOT NULL DEFAULT ''"),
+        ("fleet_units", "driver_email", "TEXT NOT NULL DEFAULT ''"),
+        ("driver_otps", "driver_email", "TEXT NOT NULL DEFAULT ''"),
+        ("driver_otps", "phone_number", "TEXT NOT NULL DEFAULT ''"),
+        ("pairing_tokens", "driver_email", "TEXT NOT NULL DEFAULT ''")
+    ]
+    for table, col, col_def in migrations:
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_def};")
+        except sqlite3.OperationalError:
+            pass
     
     # Create indexes for fast lookups
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_driver ON alerts_log(driver_id);")
@@ -119,10 +117,11 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts_log(status);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pairing_pin ON pairing_tokens(pin);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_otp_phone ON driver_otps(phone_number);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_otp_email ON driver_otps(driver_email);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_otp_code ON driver_otps(otp_code);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_units_phone ON fleet_units(driver_phone);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_units_email ON fleet_units(driver_email);")
 
-    # Production State: Starts with 0 demo trucks. Trucks created strictly on dispatch.
     conn.commit()
     conn.close()
 
