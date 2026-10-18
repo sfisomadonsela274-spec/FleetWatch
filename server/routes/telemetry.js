@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { store } from '../db/store.js';
 import { rulesEngine } from '../engine/rules.js';
 import { notificationService } from '../services/notifier.js';
+import { forwardToFastApi } from '../services/proxy.js';
 
 const router = express.Router();
 
@@ -21,6 +22,11 @@ const TelemetryPingSchema = z.object({
 
 // Telemetry Ping Ingestion
 router.post('/ping', async (req, res) => {
+  // Mobile Android APK Ingress Fallback: forward to FastAPI compliance engine
+  if (req.body && (req.body.driver_id || req.body.truck_reg)) {
+    return forwardToFastApi(req, res, '/api/v1/telemetry/ping');
+  }
+
   try {
     const ping = TelemetryPingSchema.parse(req.body);
     const truck = store.getTruckById(ping.truckId);
@@ -113,6 +119,11 @@ router.post('/ping', async (req, res) => {
   } catch (err) {
     return res.status(400).json({ success: false, error: err.errors || err.message });
   }
+});
+
+// Offline Edge Batch Telemetry Ingress Forwarder
+router.post('/batch', (req, res) => {
+  return forwardToFastApi(req, res, '/api/v1/telemetry/batch');
 });
 
 export default router;

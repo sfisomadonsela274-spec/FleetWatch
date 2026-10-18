@@ -74,9 +74,12 @@ class MainActivity : AppCompatActivity() {
         btnForceSync.setOnClickListener {
             val depth = dbHelper.getQueueDepth()
             if (depth == 0) {
-                Toast.makeText(this, "Local cache empty — fully synchronized with N4 cloud", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Acquiring live location fix & syncing with N4 cloud...", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Triggering manual uplink flush of $depth pings...", Toast.LENGTH_SHORT).show()
+            }
+            if (hasLocationPermissions()) {
+                startTrackingService()
             }
             updateQueueDisplay()
         }

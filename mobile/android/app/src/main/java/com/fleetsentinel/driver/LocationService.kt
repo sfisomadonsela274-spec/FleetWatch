@@ -88,15 +88,70 @@ class LocationService : Service(), LocationListener {
             locationManager.removeUpdates(this)
             currentPollingIntervalMs = intervalMs
             val minDistanceM = if (intervalMs == MOVING_INTERVAL_MS) 5.0f else 25.0f
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                intervalMs,
-                minDistanceM,
-                this
-            )
-            Log.i(TAG, "Requested GPS updates at ${intervalMs}ms interval, minDistance: ${minDistanceM}m")
+
+            var registered = false
+            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    intervalMs,
+                    minDistanceM,
+                    this
+                )
+                registered = true
+                Log.i(TAG, "Requested GPS updates at ${intervalMs}ms interval, minDistance: ${minDistanceM}m")
+            }
+
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    intervalMs,
+                    minDistanceM,
+                    this
+                )
+                registered = true
+                Log.i(TAG, "Requested Network location updates at ${intervalMs}ms interval")
+            }
+
+            if (!registered) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    intervalMs,
+                    minDistanceM,
+                    this
+                )
+            }
+
+            sendInitialLocationFix()
         } catch (e: SecurityException) {
             Log.e(TAG, "SecurityException in startLocationUpdates", e)
+        }
+    }
+
+    private fun sendInitialLocationFix() {
+        try {
+            val gpsLoc = if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+            } else null
+
+            val netLoc = if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            } else null
+
+            val bestLoc = when {
+                gpsLoc != null && netLoc != null -> if (gpsLoc.time >= netLoc.time) gpsLoc else netLoc
+                gpsLoc != null -> gpsLoc
+                netLoc != null -> netLoc
+                else -> null
+            }
+
+            if (bestLoc != null) {
+                Log.i(TAG, "Acquired initial location fix: lat=${bestLoc.latitude}, lng=${bestLoc.longitude}")
+                onLocationChanged(bestLoc)
+            } else {
+                Log.w(TAG, "No cached lastKnownLocation available yet, awaiting first GPS/Network fix")
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException querying lastKnownLocation", e)
         }
     }
 
@@ -210,8 +265,14 @@ class LocationService : Service(), LocationListener {
                 return false
             }
 
+            val isSuccess = code in 200..299
+            if (!isSuccess) {
+                val errBody = try { conn.errorStream?.bufferedReader()?.readText() ?: "" } catch (e: Exception) { "" }
+                Log.w(TAG, "HTTP $code failure ($urlString): $errBody")
+            }
+
             conn.disconnect()
-            code in 200..299
+            isSuccess
         } catch (e: Exception) {
             Log.w(TAG, "HTTP POST failed ($urlString): ${e.localizedMessage}")
             false

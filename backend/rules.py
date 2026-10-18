@@ -262,6 +262,7 @@ class ComplianceRulesEngine:
             "current_zone": current_zone,
             "distance_from_corridor_m": round(dist_to_corridor, 1),
             "heartbeat_status": heartbeat_status,
+            "status": "ACTIVE",
             "total_distance_km": new_total_distance_km,
             "fuel_remaining_liters": new_fuel_remaining,
             "cumulative_fuel_burned": round((current_state.get("cumulative_fuel_burned", 0.0) if current_state else 0.0) + fuel_burned_liters, 2),

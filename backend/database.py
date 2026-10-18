@@ -130,7 +130,7 @@ init_db()
 
 class DatabaseManager:
     @staticmethod
-    def get_unit(driver_id: str) -> dict | None:
+    def get_unit(identifier: str) -> dict | None:
         conn = get_connection()
         query = """
             SELECT f.*, o.otp_code
@@ -141,9 +141,9 @@ class DatabaseManager:
                 WHERE is_used = 0
                 GROUP BY driver_id
             ) o ON f.driver_id = o.driver_id
-            WHERE f.driver_id = ?;
+            WHERE f.driver_id = ? OR f.truck_reg = ?;
         """
-        row = conn.execute(query, (driver_id,)).fetchone()
+        row = conn.execute(query, (identifier, identifier)).fetchone()
         conn.close()
         return dict(row) if row else None
 
@@ -201,7 +201,8 @@ class DatabaseManager:
             heartbeat_status = excluded.heartbeat_status,
             total_distance_km = excluded.total_distance_km,
             fuel_remaining_liters = excluded.fuel_remaining_liters,
-            cumulative_fuel_burned = excluded.cumulative_fuel_burned;
+            cumulative_fuel_burned = excluded.cumulative_fuel_burned,
+            status = excluded.status;
         """, data_with_status)
         conn.commit()
         conn.close()
