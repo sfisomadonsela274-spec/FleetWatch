@@ -397,7 +397,7 @@ async def dispatch_truck(req: DispatchRequest):
     elif sms_res:
         delivery_channels.append(f"SMS: {sms_res.get('status')}")
 
-    if email_res and email_res.get("status") in ("DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"):
+    if email_res and email_res.get("status") in ("DELIVERED_SENDGRID", "DELIVERED_RESEND", "DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"):
         delivery_channels.append(f"Email to {record['driver_email']}")
     elif email_res:
         delivery_channels.append(f"Email: {email_res.get('status')} ({email_res.get('error', '')})")
