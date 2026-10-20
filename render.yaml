@@ -19,7 +19,7 @@ services:
       - key: EMAIL_PROVIDER
         value: sendgrid
       - key: EMAIL_FROM
-        value: sfisomadonsela274@gmail.com
+        value: smxtechnologies1@gmail.com
       - key: EMAIL_FROM_NAME
         value: FleetWatch Operations
       - key: SENDGRID_API_KEY

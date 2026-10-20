@@ -49,7 +49,7 @@ class EmailService:
             self.smtp_pass = raw_pass.replace(" ", "")
         else:
             self.smtp_pass = raw_pass
-        self.from_email = os.getenv("EMAIL_FROM", "sfisomadonsela274@gmail.com").strip()
+        self.from_email = os.getenv("EMAIL_FROM", "smxtechnologies1@gmail.com").strip()
         self.from_name = os.getenv("EMAIL_FROM_NAME", "FleetWatch Operations").strip()
         
         # Resolve active delivery channel
@@ -136,7 +136,7 @@ class EmailService:
                         {"to": [{"email": clean_to}]}
                     ],
                     "from": {
-                        "email": self.from_email or "sfisomadonsela274@gmail.com",
+                        "email": self.from_email or "smxtechnologies1@gmail.com",
                         "name": self.from_name or "FleetWatch Operations"
                     },
                     "subject": subject,
@@ -204,7 +204,7 @@ class EmailService:
                 payload = {
                     "sender": {
                         "name": self.from_name or "FleetWatch Operations",
-                        "email": self.from_email or "sfisomadonsela274@gmail.com"
+                        "email": self.from_email or "smxtechnologies1@gmail.com"
                     },
                     "to": [
                         {"email": clean_to}

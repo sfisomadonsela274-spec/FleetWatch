@@ -157,7 +157,7 @@ class EmailConfigureRequest(BaseModel):
     smtp_port: Optional[int] = Field(default=587, json_schema_extra={"example": 587})
     smtp_user: Optional[str] = Field(default=None, json_schema_extra={"example": "sfisomadonsela274@gmail.com"})
     smtp_pass: Optional[str] = Field(default=None, json_schema_extra={"example": "app-password-here"})
-    from_email: Optional[str] = Field(default="sfisomadonsela274@gmail.com")
+    from_email: Optional[str] = Field(default="smxtechnologies1@gmail.com")
     from_name: Optional[str] = Field(default="FleetWatch Operations")
 
 # In-Memory Event Queue for Real-Time SSE Streaming to Desktop Cockpit
