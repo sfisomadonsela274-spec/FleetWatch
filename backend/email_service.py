@@ -38,6 +38,8 @@ class EmailService:
     def reload_config(self):
         load_dotenv(ENV_PATH, override=True)
         self.provider_pref = os.getenv("EMAIL_PROVIDER", "").strip().lower()
+        self.sendgrid_api_key = os.getenv("SENDGRID_API_KEY", "").strip()
+        self.resend_api_key = os.getenv("RESEND_API_KEY", "").strip()
         self.brevo_api_key = os.getenv("BREVO_API_KEY", "").strip()
         self.smtp_host = os.getenv("SMTP_HOST", "").strip()
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
@@ -51,10 +53,18 @@ class EmailService:
         self.from_name = os.getenv("EMAIL_FROM_NAME", "FleetWatch Operations").strip()
         
         # Resolve active delivery channel
-        if self.provider_pref == "smtp" and self.smtp_host and self.smtp_user:
-            self.active_mode = "LIVE_SMTP"
+        if self.provider_pref == "sendgrid" and self.sendgrid_api_key:
+            self.active_mode = "SENDGRID_API"
+        elif self.provider_pref == "resend" and self.resend_api_key:
+            self.active_mode = "RESEND_API"
         elif self.provider_pref == "brevo" and self.brevo_api_key:
             self.active_mode = "BREVO_API"
+        elif self.provider_pref == "smtp" and self.smtp_host and self.smtp_user:
+            self.active_mode = "LIVE_SMTP"
+        elif self.sendgrid_api_key:
+            self.active_mode = "SENDGRID_API"
+        elif self.resend_api_key:
+            self.active_mode = "RESEND_API"
         elif self.brevo_api_key:
             self.active_mode = "BREVO_API"
         elif self.smtp_host and self.smtp_user:
@@ -65,15 +75,26 @@ class EmailService:
         logger.info(f"Initialized Email Gateway: active_mode={self.active_mode} (pref={self.provider_pref or 'auto'})")
 
     def get_status(self) -> dict:
+        is_sendgrid = bool(self.sendgrid_api_key)
+        is_resend = bool(self.resend_api_key)
         is_brevo = bool(self.brevo_api_key)
         is_smtp = bool(self.smtp_host and self.smtp_user)
-        is_configured = self.active_mode in ("BREVO_API", "LIVE_SMTP")
+        is_configured = self.active_mode in ("SENDGRID_API", "RESEND_API", "BREVO_API", "LIVE_SMTP")
         
+        provider_name = {
+            "SENDGRID_API": "SendGrid HTTP API",
+            "RESEND_API": "Resend HTTP API",
+            "BREVO_API": "Brevo HTTP API",
+            "LIVE_SMTP": "SMTP Gateway"
+        }.get(self.active_mode, "Local Simulation")
+
         return {
             "configured": is_configured,
             "mode": self.active_mode,
-            "provider_pref": self.provider_pref or ("brevo" if is_brevo else ("smtp" if is_smtp else "auto")),
-            "provider": "Brevo HTTP API" if self.active_mode == "BREVO_API" else ("SMTP Gateway" if self.active_mode == "LIVE_SMTP" else "Local Simulation"),
+            "provider_pref": self.provider_pref or ("sendgrid" if is_sendgrid else ("resend" if is_resend else ("brevo" if is_brevo else ("smtp" if is_smtp else "auto")))),
+            "provider": provider_name,
+            "sendgrid_configured": is_sendgrid,
+            "resend_configured": is_resend,
             "brevo_configured": is_brevo,
             "smtp_configured": is_smtp,
             "smtp_host": self.smtp_host if is_smtp else "smtp.gmail.com (Default preset)",
@@ -102,8 +123,77 @@ class EmailService:
             "status": "SENT"
         }
 
-        # 1. Preferred Cloud Delivery: Brevo HTTP API (Port 443 - Bypasses Render Port 587 Block)
-        if self.active_mode == "BREVO_API" and self.brevo_api_key:
+        # 1. Preferred Cloud Delivery: SendGrid HTTP API (Port 443 HTTPS)
+        if self.active_mode == "SENDGRID_API" and self.sendgrid_api_key:
+            try:
+                url = "https://api.sendgrid.com/v3/mail/send"
+                headers = {
+                    "Authorization": f"Bearer {self.sendgrid_api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "personalizations": [
+                        {"to": [{"email": clean_to}]}
+                    ],
+                    "from": {
+                        "email": self.from_email or "sfisomadonsela274@gmail.com",
+                        "name": self.from_name or "FleetWatch Operations"
+                    },
+                    "subject": subject,
+                    "content": [
+                        {"type": "text/plain", "value": text_body},
+                        {"type": "text/html", "value": html_body}
+                    ]
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=12)
+                if resp.status_code in (200, 201, 202):
+                    logger.info(f"✅ SendGrid HTTP delivery succeeded to {clean_to}")
+                    record["status"] = "DELIVERED_SENDGRID"
+                    record["message_id"] = resp.headers.get("X-Message-Id", "")
+                else:
+                    err_msg = f"SendGrid HTTP {resp.status_code}: {resp.text}"
+                    logger.error(f"❌ SendGrid delivery error to {clean_to}: {err_msg}")
+                    record["status"] = "FAILED"
+                    record["error"] = err_msg
+            except Exception as e:
+                logger.error(f"❌ SendGrid delivery exception to {clean_to}: {e}")
+                record["status"] = "FAILED"
+                record["error"] = str(e)
+
+        # 2. Resend HTTP API (Port 443 HTTPS)
+        elif self.active_mode == "RESEND_API" and self.resend_api_key:
+            try:
+                url = "https://api.resend.com/emails"
+                headers = {
+                    "Authorization": f"Bearer {self.resend_api_key}",
+                    "Content-Type": "application/json"
+                }
+                sender_email = self.from_email if ("@" in self.from_email and not self.from_email.endswith("@gmail.com")) else "onboarding@resend.dev"
+                sender_str = f"{self.from_name} <{sender_email}>" if self.from_name else sender_email
+                payload = {
+                    "from": sender_str,
+                    "to": [clean_to],
+                    "subject": subject,
+                    "html": html_body,
+                    "text": text_body
+                }
+                resp = requests.post(url, headers=headers, json=payload, timeout=12)
+                if resp.status_code in (200, 201, 202):
+                    logger.info(f"✅ Resend HTTP delivery succeeded to {clean_to}")
+                    record["status"] = "DELIVERED_RESEND"
+                    record["message_id"] = resp.json().get("id", "")
+                else:
+                    err_msg = f"Resend HTTP {resp.status_code}: {resp.text}"
+                    logger.error(f"❌ Resend delivery error to {clean_to}: {err_msg}")
+                    record["status"] = "FAILED"
+                    record["error"] = err_msg
+            except Exception as e:
+                logger.error(f"❌ Resend delivery exception to {clean_to}: {e}")
+                record["status"] = "FAILED"
+                record["error"] = str(e)
+
+        # 3. Brevo HTTP API (Port 443 - Legacy / Fallback)
+        elif self.active_mode == "BREVO_API" and self.brevo_api_key:
             try:
                 url = "https://api.brevo.com/v3/smtp/email"
                 headers = {
@@ -138,7 +228,7 @@ class EmailService:
                 record["status"] = "FAILED"
                 record["error"] = str(e)
 
-        # 2. Traditional SMTP Delivery (Port 587 / 465 for local dev or unblocked servers)
+        # 4. Traditional SMTP Delivery (Port 587 / 465 for local dev or unblocked servers)
         elif self.active_mode == "LIVE_SMTP" and self.smtp_host and self.smtp_user:
             try:
                 msg = MIMEMultipart("alternative")
@@ -168,7 +258,7 @@ class EmailService:
                 record["status"] = "FAILED"
                 record["error"] = str(e)
 
-        # 3. Local Simulation / Dev Mode
+        # 5. Local Simulation / Dev Mode
         else:
             logger.info(f"📧 [OUTBOUND EMAIL (SIMULATION)] To: {clean_to}")
             logger.info(f"   Subject: \"{subject}\"")
@@ -181,7 +271,11 @@ class EmailService:
         return record
 
     def send_test_email(self, to_email: str) -> dict:
-        if self.active_mode == "BREVO_API":
+        if self.active_mode == "SENDGRID_API":
+            provider_name = "SendGrid HTTP API (Port 443)"
+        elif self.active_mode == "RESEND_API":
+            provider_name = "Resend HTTP API (Port 443)"
+        elif self.active_mode == "BREVO_API":
             provider_name = "Brevo HTTP API (Port 443)"
         elif self.active_mode == "LIVE_SMTP":
             provider_name = f"SMTP ({self.smtp_host}:{self.smtp_port})"

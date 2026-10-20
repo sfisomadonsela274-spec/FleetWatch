@@ -149,7 +149,9 @@ class EmailTestRequest(BaseModel):
     to_email: str = Field(..., json_schema_extra={"example": "sfiso@fleetwatch.co.za"})
 
 class EmailConfigureRequest(BaseModel):
-    provider: Optional[str] = Field(default=None, json_schema_extra={"example": "brevo"})
+    provider: Optional[str] = Field(default=None, json_schema_extra={"example": "sendgrid"})
+    sendgrid_api_key: Optional[str] = Field(default=None, json_schema_extra={"example": "SG.xxx..."})
+    resend_api_key: Optional[str] = Field(default=None, json_schema_extra={"example": "re_xxx..."})
     brevo_api_key: Optional[str] = Field(default=None, json_schema_extra={"example": "xkeysib-..."})
     smtp_host: Optional[str] = Field(default="smtp.gmail.com", json_schema_extra={"example": "smtp.gmail.com"})
     smtp_port: Optional[int] = Field(default=587, json_schema_extra={"example": 587})
@@ -520,7 +522,7 @@ def test_email_delivery(req: EmailTestRequest):
         raise HTTPException(status_code=400, detail="Invalid recipient email address")
     result = email_gateway.send_test_email(req.to_email)
     return {
-        "success": result.get("status") in ("DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"),
+        "success": result.get("status") in ("DELIVERED_SENDGRID", "DELIVERED_RESEND", "DELIVERED_BREVO", "DELIVERED_SMTP", "DELIVERED_MOCK"),
         "delivery": result,
         "message": f"Test email dispatched to {req.to_email} ({result.get('status')})"
     }
@@ -528,7 +530,7 @@ def test_email_delivery(req: EmailTestRequest):
 @app.post("/api/v1/email/configure")
 def configure_email_gateway(req: EmailConfigureRequest):
     """
-    Updates Brevo / SMTP gateway configuration, persists to .env, and reloads service.
+    Updates SendGrid / Resend / Brevo / SMTP gateway configuration, persists to .env, and reloads service.
     """
     env_file = Path(__file__).parent.parent / ".env"
 
@@ -544,6 +546,12 @@ def configure_email_gateway(req: EmailConfigureRequest):
     if req.provider is not None:
         existing_vars["EMAIL_PROVIDER"] = req.provider.strip().lower()
         os.environ["EMAIL_PROVIDER"] = req.provider.strip().lower()
+    if req.sendgrid_api_key is not None:
+        existing_vars["SENDGRID_API_KEY"] = req.sendgrid_api_key.strip()
+        os.environ["SENDGRID_API_KEY"] = req.sendgrid_api_key.strip()
+    if req.resend_api_key is not None:
+        existing_vars["RESEND_API_KEY"] = req.resend_api_key.strip()
+        os.environ["RESEND_API_KEY"] = req.resend_api_key.strip()
     if req.brevo_api_key is not None:
         existing_vars["BREVO_API_KEY"] = req.brevo_api_key.strip()
         os.environ["BREVO_API_KEY"] = req.brevo_api_key.strip()
@@ -573,11 +581,11 @@ def configure_email_gateway(req: EmailConfigureRequest):
 
     email_gateway.reload_config()
 
-    target_desc = "Brevo HTTP API (Port 443)" if (req.provider == "brevo" or (req.brevo_api_key and req.provider != "smtp")) else f"SMTP ({req.smtp_host}:{req.smtp_port})"
+    st = email_gateway.get_status()
     return {
         "success": True,
-        "message": f"Email configuration saved and reloaded for {target_desc}",
-        "status": email_gateway.get_status()
+        "message": f"Email configuration saved and reloaded for {st['provider']}",
+        "status": st
     }
 
 @app.get("/api/v1/sms/logs")

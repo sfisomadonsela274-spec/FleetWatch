@@ -17,10 +17,12 @@ services:
       - key: APK_DOWNLOAD_URL
         value: https://github.com/sfisomadonsela274-spec/FleetWatch/releases/download/v1.0.0/FleetSentinel-Driver.apk
       - key: EMAIL_PROVIDER
-        value: brevo
+        value: sendgrid
       - key: EMAIL_FROM
         value: sfisomadonsela274@gmail.com
       - key: EMAIL_FROM_NAME
         value: FleetWatch Operations
+      - key: SENDGRID_API_KEY
+        sync: false
       - key: BREVO_API_KEY
         sync: false

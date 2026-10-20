@@ -3159,9 +3159,13 @@
         <!-- Provider Selection Tabs -->
         <div class="border-b border-slate-200 pb-2">
           <div class="flex items-center space-x-2 text-xs">
-            <button type="button" id="email-tab-btn-brevo" onclick="switchEmailProviderTab('brevo')"
+            <button type="button" id="email-tab-btn-sendgrid" onclick="switchEmailProviderTab('sendgrid')"
               class="py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm">
-              🚀 Brevo API (Cloud Port 443)
+              ⚡ SendGrid API (Cloud Port 443)
+            </button>
+            <button type="button" id="email-tab-btn-brevo" onclick="switchEmailProviderTab('brevo')"
+              class="py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition">
+              Brevo API
             </button>
             <button type="button" id="email-tab-btn-smtp" onclick="switchEmailProviderTab('smtp')"
               class="py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition">
@@ -3172,15 +3176,35 @@
 
         <!-- Configuration Form -->
         <form id="smtp-config-form" onsubmit="handleSaveSmtpConfig(event)" class="space-y-3 text-xs overflow-y-auto pr-1">
-          <!-- 1. Brevo HTTP API Pane -->
-          <div id="email-pane-brevo" class="space-y-3">
+          <!-- 1. SendGrid HTTP API Pane -->
+          <div id="email-pane-sendgrid" class="space-y-3">
             <div class="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl">
               <div class="flex items-center justify-between mb-1">
                 <span class="font-bold text-emerald-900 text-xs">Recommended for Cloud Deployments (Render / Cloudflare)</span>
-                <span class="text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">300 Free/Day</span>
+                <span class="text-[10px] font-mono font-bold bg-emerald-200 text-emerald-900 px-1.5 py-0.5 rounded">100 Free/Day</span>
               </div>
               <p class="text-[11px] text-emerald-800 leading-relaxed">
-                Connects directly to <strong>api.brevo.com over HTTPS (Port 443)</strong>, completely bypassing Render's outbound SMTP port 587 block.
+                Connects directly to <strong>api.sendgrid.com over HTTPS (Port 443)</strong>, completely bypassing Render's outbound SMTP port 587 block.
+              </p>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1">SendGrid API Key</label>
+              <input id="sendgrid-input-key" type="password" placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxx"
+                class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
+              <p class="text-[10px] text-slate-400 mt-1">Get your free key from <strong>SendGrid Dashboard &gt; Settings &gt; API Keys &gt; Create API Key</strong>.</p>
+            </div>
+          </div>
+
+          <!-- 2. Brevo HTTP API Pane -->
+          <div id="email-pane-brevo" class="space-y-3 hidden">
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-bold text-slate-800 text-xs">Brevo HTTP API (Port 443)</span>
+                <span class="text-[10px] font-mono font-bold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Legacy</span>
+              </div>
+              <p class="text-[11px] text-slate-600 leading-relaxed">
+                Connects to api.brevo.com over HTTPS. Requires an active, unblocked Brevo account.
               </p>
             </div>
 
@@ -3188,7 +3212,6 @@
               <label class="block font-semibold text-slate-700 mb-1">Brevo API Key (v3)</label>
               <input id="brevo-input-key" type="password" placeholder="xkeysib-xxxxxxxxxxxxxxxxxxxxxxxx"
                 class="w-full px-3 py-2 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-slate-900 font-mono shadow-inner">
-              <p class="text-[10px] text-slate-400 mt-1">Get your free key from <strong>Brevo Dashboard &gt; SMTP &amp; API &gt; API Keys &gt; Generate a new API key</strong>.</p>
             </div>
           </div>
 
@@ -6894,34 +6917,27 @@
       loadSmtpStatus();
     }
 
-    let currentEmailProvider = 'brevo';
+    let currentEmailProvider = 'sendgrid';
 
     function switchEmailProviderTab(provider) {
       currentEmailProvider = provider;
+      const sendgridTabBtn = document.getElementById('email-tab-btn-sendgrid');
       const brevoTabBtn = document.getElementById('email-tab-btn-brevo');
       const smtpTabBtn = document.getElementById('email-tab-btn-smtp');
+      const sendgridPane = document.getElementById('email-pane-sendgrid');
       const brevoPane = document.getElementById('email-pane-brevo');
       const smtpPane = document.getElementById('email-pane-smtp');
 
-      if (provider === 'brevo') {
-        if (brevoTabBtn) {
-          brevoTabBtn.className = 'py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm';
-        }
-        if (smtpTabBtn) {
-          smtpTabBtn.className = 'py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition';
-        }
-        if (brevoPane) brevoPane.classList.remove('hidden');
-        if (smtpPane) smtpPane.classList.add('hidden');
-      } else {
-        if (brevoTabBtn) {
-          brevoTabBtn.className = 'py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition';
-        }
-        if (smtpTabBtn) {
-          smtpTabBtn.className = 'py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm';
-        }
-        if (brevoPane) brevoPane.classList.add('hidden');
-        if (smtpPane) smtpPane.classList.remove('hidden');
-      }
+      const activeClass = 'py-1.5 px-3 rounded-lg bg-emerald-600 text-white font-bold transition shadow-sm';
+      const inactiveClass = 'py-1.5 px-3 rounded-lg text-slate-600 hover:bg-slate-100 font-semibold transition';
+
+      if (sendgridTabBtn) sendgridTabBtn.className = (provider === 'sendgrid') ? activeClass : inactiveClass;
+      if (brevoTabBtn) brevoTabBtn.className = (provider === 'brevo') ? activeClass : inactiveClass;
+      if (smtpTabBtn) smtpTabBtn.className = (provider === 'smtp') ? activeClass : inactiveClass;
+
+      if (sendgridPane) sendgridPane.classList.toggle('hidden', provider !== 'sendgrid');
+      if (brevoPane) brevoPane.classList.toggle('hidden', provider !== 'brevo');
+      if (smtpPane) smtpPane.classList.toggle('hidden', provider !== 'smtp');
     }
 
     function closeSmtpConfigModal() {
@@ -6972,6 +6988,7 @@
       const userInput = document.getElementById('smtp-input-user');
       const fromInput = document.getElementById('smtp-input-from');
       const fromNameInput = document.getElementById('smtp-input-from-name');
+      const sendgridKeyInput = document.getElementById('sendgrid-input-key');
       const brevoKeyInput = document.getElementById('brevo-input-key');
 
       try {
@@ -6979,7 +6996,15 @@
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
-        if (data.mode === 'BREVO_API' || data.brevo_configured) {
+        if (data.mode === 'SENDGRID_API' || data.sendgrid_configured) {
+          if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+          if (text) text.textContent = 'Mode: SendGrid HTTP API (Port 443 Active)';
+          if (host) host.textContent = 'api.sendgrid.com (HTTPS)';
+          if (banner) {
+            banner.className = 'p-3 rounded-xl border text-xs flex items-center justify-between bg-emerald-50/80 border-emerald-200 text-emerald-900';
+          }
+          switchEmailProviderTab('sendgrid');
+        } else if (data.mode === 'BREVO_API' || data.brevo_configured) {
           if (dot) dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
           if (text) text.textContent = 'Mode: Brevo HTTP API (Port 443 Active)';
           if (host) host.textContent = 'api.brevo.com (HTTPS)';
@@ -7024,6 +7049,7 @@
       const passInput = document.getElementById('smtp-input-pass');
       const fromInput = document.getElementById('smtp-input-from');
       const fromNameInput = document.getElementById('smtp-input-from-name');
+      const sendgridKeyInput = document.getElementById('sendgrid-input-key');
       const brevoKeyInput = document.getElementById('brevo-input-key');
 
       let payload = {
@@ -7031,7 +7057,16 @@
         from_name: fromNameInput && fromNameInput.value.trim() ? fromNameInput.value.trim() : undefined
       };
 
-      if (currentEmailProvider === 'brevo') {
+      if (currentEmailProvider === 'sendgrid') {
+        const key = sendgridKeyInput ? sendgridKeyInput.value.trim() : '';
+        if (!key) {
+          showToast('Please enter your SendGrid API key', 'warning');
+          if (sendgridKeyInput) sendgridKeyInput.focus();
+          return;
+        }
+        payload.provider = 'sendgrid';
+        payload.sendgrid_api_key = key;
+      } else if (currentEmailProvider === 'brevo') {
         const key = brevoKeyInput ? brevoKeyInput.value.trim() : '';
         if (!key) {
           showToast('Please enter your Brevo API key (v3)', 'warning');
@@ -7116,14 +7151,18 @@
         if (!res.ok) throw new Error(data.detail || 'Test dispatch rejected');
 
         const status = data.delivery ? data.delivery.status : '';
-        if (status === 'DELIVERED_BREVO') {
+        if (status === 'DELIVERED_SENDGRID') {
+          showToast(`🚀 Live email delivered via SendGrid (Port 443) to ${recipient}! Check inbox.`, 'success');
+        } else if (status === 'DELIVERED_RESEND') {
+          showToast(`🚀 Live email delivered via Resend (Port 443) to ${recipient}! Check inbox.`, 'success');
+        } else if (status === 'DELIVERED_BREVO') {
           showToast(`🚀 Live email delivered via Brevo (Port 443) to ${recipient}! Check inbox.`, 'success');
         } else if (status === 'DELIVERED_SMTP') {
           showToast(`✉️ Live email delivered via SMTP to ${recipient}! Check inbox.`, 'success');
         } else if (status === 'FAILED') {
           showToast(`Delivery failed: ${data.delivery.error || 'Check credentials'}`, 'error');
         } else {
-          showToast(`Simulation mock logged (Mode: ${status || 'MOCK'}). Configure Brevo or SMTP for live delivery.`, 'info');
+          showToast(`Simulation mock logged (Mode: ${status || 'MOCK'}). Configure SendGrid for live delivery.`, 'info');
         }
         if (typeof fetchAndRenderSmsLogs === 'function') fetchAndRenderSmsLogs();
       } catch (err) {
